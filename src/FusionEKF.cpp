@@ -11,13 +11,16 @@ using std::vector;
 /*
  * Constructor.
  */
-FusionEKF::FusionEKF(VectorXd &x0, MatrixXd &P0, DynamicModel dynamicModel) {
+FusionEKF::FusionEKF() {
   is_initialized_ = false;
 
   previous_timestamp_ = 0;
-  ekf_.Init(x0, P0, dynamicModel);
 }
 
+void FusionEKF::Init(VectorXd &x0, MatrixXd &P0, DynamicModel dynamicModel)
+{
+  ekf_.Init(x0, P0, dynamicModel);
+}
 /**
 * Destructor.
 */
@@ -45,47 +48,22 @@ void FusionEKF::ProcessMeasurement(const MeasurementPackage &measurement_pack) {
       previous_timestamp_ = measurement_pack.timestamp_;
       // done initializing, no need to predict or update
       is_initialized_ = true;
+      cout<<"Initialized!"<<endl;
   }
 
   /*****************************************************************************
    *  Prediction
    ****************************************************************************/
-
-  /**
-     * Update the state transition matrix F according to the new elapsed time.
-      - Time is measured in seconds.
-     * Update the process noise covariance matrix.
-   */
   float dt = (measurement_pack.timestamp_ - previous_timestamp_) / 1000000.0;	//dt - expressed in seconds
-//  float dt2, dt3, dt4;
-
-//  ekf_.F_(0, 2) = dt;
-//  ekf_.F_(1, 3) = dt;
-//
-//  dt2 = dt*dt;
-//  dt3 = dt2*dt;
-//  dt4 = dt3*dt;
-//
-//  ekf_.Q_ << noise_ax*dt4/4, 0, noise_ax*dt3/2, 0,
-//              0, noise_ay*dt4/4, 0, noise_ay*dt3/2,
-//              noise_ax*dt3/2, 0, noise_ax*dt2,  0,
-//              0, noise_ay*dt3/2, 0, noise_ay*dt2;
-
   ekf_.Predict(dt);
 
   /*****************************************************************************
    *  Update
    ****************************************************************************/
-
-  /**
-     * Use the sensor type to perform the update step.
-     * Update the state and covariance matrices.
-   */
-
   ekf_.UpdateEKF(measurement_pack.raw_measurements_, sensors_[measurement_pack.sensor_type_]);
 
   previous_timestamp_ = measurement_pack.timestamp_;
   // print the output
-  cout << "x_ = " << ekf_.x_ << endl;
-  cout << "P_ = " << ekf_.P_ << endl;
+//  cout << "x_ = " << ekf_.x_ << endl;
+//  cout << "P_ = " << ekf_.P_ << endl;
 }

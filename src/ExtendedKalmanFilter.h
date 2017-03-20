@@ -7,8 +7,22 @@
 using Eigen::MatrixXd;
 using Eigen::VectorXd;
 
-// function pointer for measurement function
+struct enum_hash
+{
+  template <typename T>
+  inline
+  typename std::enable_if<std::is_enum<T>::value, std::size_t>::type
+  operator ()(T const value) const
+  {
+    return static_cast<std::size_t>(value);
+  }
+};
+enum SensorType {
+  LASER,
+  RADAR
+};
 
+// function pointer for measurement function
 typedef std::function<VectorXd (float dt, const VectorXd &x)> ModelFunc;
 typedef std::function<MatrixXd (float dt, const VectorXd &x)> ModelJacobianFunc;
 typedef std::function<MatrixXd (float dt, const VectorXd &x)> ProcessNoiseFunc;
@@ -46,43 +60,6 @@ inline SensorJacobianFunc MakeSensorJacobian(MeasurementFunc f, const float h = 
   });
 }
 
-//template <ModelFunc& dynamicsFunc, SensorJacobianFunc& jacobianFunc, const MatrixXd& R>
-//class SensorModel {
-//public:
-//  inline MatrixXd CalculateJacobian(const VectorXd& x)
-//  {
-//    if(jacobianFunc == NULL)
-//    {
-//      jacobianFunc = MakeSensorJacobian(dynamicsFunc);
-//    }
-//    return jacobianFunc(x);
-//  }
-//  inline VectorXd Predict(const VectorXd& x)
-//  {
-//    return dynamicsFunc(x);
-//  }
-//  inline MatrixXd GetCovariance()
-//  {
-//    return R;
-//  }
-//};
-//template <>
-//class SensorModel<const MatrixXd&, const MatrixXd&>{
-//public:
-//  inline MatrixXd CalculateJacobian(const VectorXd& x)
-//  {
-//    return H;
-//  }
-//  inline VectorXd Predict(const VectorXd& x)
-//  {
-//    return H * x;
-//  }
-//  inline MatrixXd GetCovariance()
-//  {
-//    return R;
-//  }
-//};
-
 class ExtendedKalmanFilter {
 public:
 
@@ -91,12 +68,6 @@ public:
 
   // state covariance matrix
   MatrixXd P_;
-
-  // state transistion matrix
-  MatrixXd F_;
-
-  // process covariance matrix
-  MatrixXd Q_;
 
   // identity matrix
   MatrixXd I_;

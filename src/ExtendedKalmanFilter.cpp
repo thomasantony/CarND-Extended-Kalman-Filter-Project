@@ -1,4 +1,7 @@
 #include "ExtendedKalmanFilter.h"
+#include <iostream>
+
+using namespace std;
 
 ExtendedKalmanFilter::ExtendedKalmanFilter() {}
 
@@ -7,8 +10,6 @@ ExtendedKalmanFilter::~ExtendedKalmanFilter() {}
 void ExtendedKalmanFilter::Init(VectorXd &x_in, MatrixXd &P_in, DynamicModel dynamicModel) {
   x_ = x_in;
   P_ = P_in;
-//  F_ = F_in;
-//  Q_ = Q_in;
   dynamicModel_ = dynamicModel;
   long x_size = x_.size();
   I_ = MatrixXd::Identity(x_size, x_size);
@@ -16,16 +17,18 @@ void ExtendedKalmanFilter::Init(VectorXd &x_in, MatrixXd &P_in, DynamicModel dyn
 
 void ExtendedKalmanFilter::Predict(float delta_T) {
   // KF Prediction step
+
   ProcessNoiseFunc noiseFunc;
   ModelFunc dynamicFunc;
   ModelJacobianFunc jacobianFunc;
   std::tie(dynamicFunc, jacobianFunc, noiseFunc) = dynamicModel_;
 
-  x_ = dynamicFunc(delta_T, x_);
-  MatrixXd F_ = jacobianFunc(delta_T, x_);
-//  x_ = F_ * x_;
+//  x_ = dynamicFunc(delta_T, x_);
+  MatrixXd F = jacobianFunc(delta_T, x_);
+  cout << "x:" << x_ << endl;
+  x_ = F * x_;
   auto Q_ = noiseFunc(delta_T, x_);
-  P_ = F_ * P_ * F_.transpose() + Q_;
+  P_ = F * P_ * F.transpose() + Q_;
 }
 
 void ExtendedKalmanFilter::UpdateEKF(const Eigen::VectorXd &z, const SensorModel& sensor){

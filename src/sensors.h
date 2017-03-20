@@ -7,9 +7,5 @@
 
 #include "Eigen/Dense"
 
-enum SensorType {
-  LASER,
-  RADAR
-};
 
 #endif //EXTENDEDKF_SENSORS_H

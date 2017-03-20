@@ -5,7 +5,6 @@
 #include <stdlib.h>
 #include "Eigen/Dense"
 
-#include "sensors.h"
 #include "FusionEKF.h"
 #include "ground_truth_package.h"
 #include "measurement_package.h"
@@ -78,16 +77,30 @@ namespace {
           0, noise_ay*dt3/2, 0, noise_ay*dt2;
       return Q;
     });
+
+
     auto modelFunc = ModelFunc([](float dt, const VectorXd &x){
-      MatrixXd F = MatrixXd::Identity(4,4);
-      F(0, 2) = dt;
-      F(1, 3) = dt;
+      MatrixXd F = MatrixXd(4,4);
+      F << 1, 0, dt, 0,
+          0, 1,  0, dt,
+          0, 0,  1, 0,
+          0, 0,  0, 1;
+        cout<<F.size()<<","<<x.size()<<endl;
+//      F(0, 2) = dt;
+//      F(1, 3) = dt;
+//      cout <<"moo"<<endl;
+      cout << F*x << endl;
+//      cout <<"bar"<<endl;
       return F*x;
     });
     auto jacobianFunc = ModelJacobianFunc([](float dt, const VectorXd &x){
-      MatrixXd F = MatrixXd::Identity(4,4);
-      F(0, 2) = dt;
-      F(1, 3) = dt;
+      MatrixXd F = MatrixXd(4,4);
+      F << 1, 0, dt, 0,
+          0, 1,  0, dt,
+          0, 0,  1, 0,
+          0, 0,  0, 1;
+//      F(0, 2) = dt;
+//      F(1, 3) = dt;
       return F;
     });
     return DynamicModel(modelFunc, jacobianFunc, processNoiseFunc);
@@ -218,14 +231,13 @@ int main(int argc, char* argv[]) {
   VectorXd x_in = VectorXd(4);
   x_in << 1, 1, 1, 1;
 
-
   MatrixXd P_in = MatrixXd(4, 4);
   P_in << 10, 0, 0, 0,
       0, 10, 0, 0,
       0, 0, 1000, 0,
       0, 0, 0, 1000;
-  FusionEKF fusionEKF = FusionEKF(x_in, P_in, motionModel);
-//  fusionEKF.Init(x_in, P_in, motionModel);
+  FusionEKF fusionEKF;
+  fusionEKF.Init(x_in, P_in, motionModel);
 
   fusionEKF.AddLinearSensor(SensorType::LASER, R_laser, H_laser);
   fusionEKF.AddSensor(SensorType::RADAR, R_radar, RadarMeasurement);
@@ -268,7 +280,6 @@ int main(int argc, char* argv[]) {
 
     estimations.push_back(fusionEKF.ekf_.x_);
     ground_truth.push_back(gt_pack_list[k].gt_values_);
-    cout<<k<<endl;
   }
   // compute the accuracy (RMSE)
   cout << "Accuracy - RMSE:" << endl << Tools::CalculateRMSE(estimations, ground_truth) << endl;

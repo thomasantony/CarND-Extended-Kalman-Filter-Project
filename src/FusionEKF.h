@@ -11,20 +11,21 @@
 #include "measurement_package.h"
 #include "ExtendedKalmanFilter.h"
 
-typedef std::unordered_map<SensorType, SensorModel> SensorMap;
+typedef std::unordered_map<SensorType, SensorModel, enum_hash> SensorMap;
 
 class FusionEKF {
 public:
   /**
   * Constructor.
   */
-  FusionEKF(VectorXd &x0, MatrixXd &P0, DynamicModel dynamicModel);
+  FusionEKF();
 
   /**
   * Destructor.
   */
   virtual ~FusionEKF();
 
+  void Init(VectorXd &x0, MatrixXd &P0, DynamicModel dynamicModel);
   /**
   * Run the whole flow of the Kalman Filter from here.
   */
@@ -60,13 +61,13 @@ private:
   // Map containing sensor definitions
   SensorMap sensors_;
 
-  MatrixXd F_;
-  MatrixXd R_;
-  MatrixXd Q_;
+//  MatrixXd F_;
+//  MatrixXd R_;
+//  MatrixXd Q_;
 
-  //acceleration noise components
-  float noise_ax;
-  float noise_ay;
+//  //acceleration noise components
+//  float noise_ax;
+//  float noise_ay;
 };
 
 #endif /* FusionEKF_H_ */
