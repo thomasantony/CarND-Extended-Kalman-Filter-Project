@@ -25,7 +25,7 @@ public:
   */
   virtual ~FusionEKF();
 
-  void Init(VectorXd &x0, MatrixXd &P0, DynamicModel dynamicModel);
+  void Init(const VectorXd &x0, const MatrixXd &P0, DynamicModel dynamicModel);
   /**
   * Run the whole flow of the Kalman Filter from here.
   */

@@ -7,7 +7,7 @@ ExtendedKalmanFilter::ExtendedKalmanFilter() {}
 
 ExtendedKalmanFilter::~ExtendedKalmanFilter() {}
 
-void ExtendedKalmanFilter::Init(VectorXd &x_in, MatrixXd &P_in, DynamicModel dynamicModel) {
+void ExtendedKalmanFilter::Init(const VectorXd &x_in, const MatrixXd &P_in, DynamicModel dynamicModel) {
   x_ = x_in;
   P_ = P_in;
   dynamicModel_ = dynamicModel;

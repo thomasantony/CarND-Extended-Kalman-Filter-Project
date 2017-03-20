@@ -17,7 +17,7 @@ FusionEKF::FusionEKF() {
   previous_timestamp_ = 0;
 }
 
-void FusionEKF::Init(VectorXd &x0, MatrixXd &P0, DynamicModel dynamicModel)
+void FusionEKF::Init(const VectorXd &x0, const MatrixXd &P0, DynamicModel dynamicModel)
 {
   ekf_.Init(x0, P0, dynamicModel);
 }

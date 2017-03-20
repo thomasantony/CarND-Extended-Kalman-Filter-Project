@@ -82,7 +82,7 @@ public:
    * @param R_in Measurement covariance matrix
    * @param Q_in Process covariance matrix
    */
-  void Init(VectorXd &x_in, MatrixXd &P_in, DynamicModel dynamicModel);
+  void Init(const VectorXd &x_in, const MatrixXd &P_in, DynamicModel dynamicModel);
 
   /**
    * Prediction Predicts the state and the state covariance
@@ -95,7 +95,7 @@ public:
    * Updates the state by using Extended Kalman Filter equations
    * @param z The measurement at k+1
    */
-  void UpdateEKF(const  VectorXd &z, const SensorModel& sensor);
+  void UpdateEKF(const VectorXd &z, const SensorModel& sensor);
 
   /**
    * Updates the state by using the given measurement and predicted measurement

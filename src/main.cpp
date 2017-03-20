@@ -15,6 +15,94 @@ using Eigen::MatrixXd;
 using Eigen::VectorXd;
 using std::vector;
 
+// Problem definitions
+namespace {
+  const MatrixXd H_laser = (MatrixXd(2,4) << 1, 0, 0, 0,
+      0, 1, 0, 0).finished();
+  const MatrixXd R_laser = (MatrixXd(2,2) << 0.0225, 0,
+      0, 0.0225).finished();
+  const MatrixXd R_radar = (MatrixXd(3,3) << 0.09, 0, 0,
+      0, 0.09, 0,
+      0, 0, 0.09).finished();
+
+  const VectorXd x_0 = (VectorXd(4) << 1, 1, 1, 1).finished();
+  const MatrixXd P_0 = (MatrixXd(4,4) << 10, 0, 0, 0,
+      0, 10, 0, 0,
+      0, 0, 1000, 0,
+      0, 0, 0, 1000).finished();
+
+  const float noise_ax = 7, noise_ay = 7;
+
+  const auto processNoiseFunc =  ProcessNoiseFunc([](float dt, const VectorXd &x) mutable {
+      MatrixXd Q = MatrixXd(4, 4);
+      float dt2, dt3, dt4;
+      dt2 = dt*dt;
+      dt3 = dt2*dt;
+      dt4 = dt3*dt;
+
+      Q << noise_ax*dt4/4, 0, noise_ax*dt3/2, 0,
+          0, noise_ay*dt4/4, 0, noise_ay*dt3/2,
+          noise_ax*dt3/2, 0, noise_ax*dt2,  0,
+          0, noise_ay*dt3/2, 0, noise_ay*dt2;
+      return Q;
+    });
+
+  const auto modelFunc = ModelFunc([](float dt, const VectorXd &x){
+      MatrixXd F = MatrixXd(4,4);
+      F << 1, 0, dt, 0,
+          0, 1,  0, dt,
+          0, 0,  1, 0,
+          0, 0,  0, 1;
+      return std::tuple<VectorXd, MatrixXd>(F*x, F);
+    });
+  const DynamicModel motionModel = DynamicModel(modelFunc, processNoiseFunc);
+
+  VectorXd RadarMeasurement(const VectorXd &x) {
+    VectorXd z_out(3);
+    float px = x[0];
+    float py = x[1];
+    float vx = x[2];
+    float vy = x[3];
+
+    z_out << sqrt(px*px + py*py),
+        atan2(py, px),
+        (px*vx + py*vy)/sqrt(px*px + py*py);
+
+    return z_out;
+  }
+
+  MatrixXd RadarJacobian(const VectorXd &x) {
+    MatrixXd Hj(3, 4);
+    //recover state parameters
+    float px = x(0);
+    float py = x(1);
+    float vx = x(2);
+    float vy = x(3);
+
+    float rho = sqrt(px * px + py * py);
+    float rho2 = rho * rho;
+    float rho3 = rho2 * rho;
+
+    //check division by zero
+    if (rho < 1e-6) {
+      cerr << "Divide by zero!! Oh noes!!" << endl;
+      return Hj;
+    }
+    if (abs(rho) < 1e-4) {
+      Hj << 0, 0, 0, 0,
+          -0, 0, 0, 0,
+          0, 0, 0, 0;
+    } else {
+      //compute the Jacobian matrix
+      Hj << px / rho, py / rho, 0, 0,
+          -py / rho2, px / rho2, 0, 0,
+          py * (vx * py - vy * px) / rho3, px * (vy * px - vx * py) / rho3, px / rho, py / rho;
+    }
+
+    return Hj;
+  }
+}
+
 void check_arguments(int argc, char* argv[]) {
   string usage_instructions = "Usage instructions: ";
   usage_instructions += argv[0];
@@ -50,89 +138,7 @@ void check_files(ifstream& in_file, string& in_name,
     exit(EXIT_FAILURE);
   }
 }
-// Sensor definitions
-namespace {
-  const MatrixXd H_laser = (MatrixXd(2,4) << 1, 0, 0, 0,
-                                             0, 1, 0, 0).finished();
-  const MatrixXd R_laser = (MatrixXd(2,2) << 0.0225, 0,
-                                             0, 0.0225).finished();
 
-  const MatrixXd R_radar = (MatrixXd(3,3) << 0.09, 0, 0,
-                                             0, 0.09, 0,
-                                             0, 0, 0.09).finished();
-
-  const float noise_ax = 7, noise_ay = 7;
-  DynamicModel MakeMotionModel()
-  {
-    auto processNoiseFunc =  ProcessNoiseFunc([](float dt, const VectorXd &x) mutable {
-      MatrixXd Q = MatrixXd(4, 4);
-      float dt2, dt3, dt4;
-      dt2 = dt*dt;
-      dt3 = dt2*dt;
-      dt4 = dt3*dt;
-
-      Q << noise_ax*dt4/4, 0, noise_ax*dt3/2, 0,
-          0, noise_ay*dt4/4, 0, noise_ay*dt3/2,
-          noise_ax*dt3/2, 0, noise_ax*dt2,  0,
-          0, noise_ay*dt3/2, 0, noise_ay*dt2;
-      return Q;
-    });
-
-    auto modelFunc = ModelFunc([=](float dt, const VectorXd &x){
-      MatrixXd F = MatrixXd(4,4);
-      F << 1, 0, dt, 0,
-          0, 1,  0, dt,
-          0, 0,  1, 0,
-          0, 0,  0, 1;
-      return std::tuple<VectorXd, MatrixXd>(F*x, F);
-    });
-    return DynamicModel(modelFunc, processNoiseFunc);
-  }
-  VectorXd RadarMeasurement(const VectorXd &x) {
-    VectorXd z_out(3);
-    float px = x[0];
-    float py = x[1];
-    float vx = x[2];
-    float vy = x[3];
-
-    z_out << sqrt(px*px + py*py),
-        atan2(py, px),
-        (px*vx + py*vy)/sqrt(px*px + py*py);
-
-    return z_out;
-  }
-
-  MatrixXd RadarJacobian(const VectorXd &x) {
-    MatrixXd Hj(3, 4);
-    //recover state parameters
-    float px = x(0);
-    float py = x(1);
-    float vx = x(2);
-    float vy = x(3);
-
-    float rho = sqrt(px * px + py * py);
-    float rho2 = rho * rho;
-    float rho3 = rho2 * rho;
-
-    //check division by zero
-    if (rho < 1e-6) {
-      cerr << "Divide by zero!! Oh noes!!" << endl;
-      return Hj;
-    }
-    if (abs(rho) < 1e-4) {
-      Hj << 0, 0, 0, 0,
-           -0, 0, 0, 0,
-            0, 0, 0, 0;
-    } else {
-      //compute the Jacobian matrix
-      Hj << px / rho, py / rho, 0, 0,
-          -py / rho2, px / rho2, 0, 0,
-          py * (vx * py - vy * px) / rho3, px * (vy * px - vx * py) / rho3, px / rho, py / rho;
-    }
-
-    return Hj;
-  }
-}
 
 int main(int argc, char* argv[]) {
 
@@ -210,17 +216,8 @@ int main(int argc, char* argv[]) {
   }
 
   // Create a Fusion EKF instance
-  DynamicModel motionModel = MakeMotionModel();
-  VectorXd x_in = VectorXd(4);
-  x_in << 1, 1, 1, 1;
-
-  MatrixXd P_in = MatrixXd(4, 4);
-  P_in << 10, 0, 0, 0,
-      0, 10, 0, 0,
-      0, 0, 1000, 0,
-      0, 0, 0, 1000;
   FusionEKF fusionEKF;
-  fusionEKF.Init(x_in, P_in, motionModel);
+  fusionEKF.Init(x_0, P_0, motionModel);
 
   fusionEKF.AddLinearSensor(SensorType::LASER, R_laser, H_laser);
   fusionEKF.AddSensor(SensorType::RADAR, R_radar, RadarMeasurement, RadarJacobian);
