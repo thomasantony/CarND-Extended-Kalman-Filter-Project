@@ -4,9 +4,12 @@
 #include <vector>
 #include <stdlib.h>
 #include "Eigen/Dense"
+
+#include "sensors.h"
 #include "FusionEKF.h"
 #include "ground_truth_package.h"
 #include "measurement_package.h"
+#include "tools.h"
 
 using namespace std;
 using Eigen::MatrixXd;
@@ -48,6 +51,92 @@ void check_files(ifstream& in_file, string& in_name,
     exit(EXIT_FAILURE);
   }
 }
+// Sensor definitions
+namespace {
+  const MatrixXd H_laser = (MatrixXd(2,4) << 1, 0, 0, 0,
+                                             0, 1, 0, 0).finished();
+  const MatrixXd R_laser = (MatrixXd(2,2) << 0.0225, 0,
+                                             0, 0.0225).finished();
+
+  const MatrixXd R_radar = (MatrixXd(3,3) << 0.09, 0, 0,
+                                             0, 0.09, 0,
+                                             0, 0, 0.09).finished();
+
+  const float noise_ax = 7, noise_ay = 7;
+  DynamicModel MakeMotionModel()
+  {
+    auto processNoiseFunc =  ProcessNoiseFunc([](float dt, const VectorXd &x) {
+      MatrixXd Q = MatrixXd(4, 4);
+      float dt2, dt3, dt4;
+      dt2 = dt*dt;
+      dt3 = dt2*dt;
+      dt4 = dt3*dt;
+
+      Q << noise_ax*dt4/4, 0, noise_ax*dt3/2, 0,
+          0, noise_ay*dt4/4, 0, noise_ay*dt3/2,
+          noise_ax*dt3/2, 0, noise_ax*dt2,  0,
+          0, noise_ay*dt3/2, 0, noise_ay*dt2;
+      return Q;
+    });
+    auto modelFunc = ModelFunc([](float dt, const VectorXd &x){
+      MatrixXd F = MatrixXd::Identity(4,4);
+      F(0, 2) = dt;
+      F(1, 3) = dt;
+      return F*x;
+    });
+    auto jacobianFunc = ModelJacobianFunc([](float dt, const VectorXd &x){
+      MatrixXd F = MatrixXd::Identity(4,4);
+      F(0, 2) = dt;
+      F(1, 3) = dt;
+      return F;
+    });
+    return DynamicModel(modelFunc, jacobianFunc, processNoiseFunc);
+  }
+  VectorXd RadarMeasurement(const VectorXd &x) {
+    VectorXd z_out(3);
+    float px = x[0];
+    float py = x[1];
+    float vx = x[2];
+    float vy = x[3];
+
+    z_out << sqrt(px*px + py*py),
+        atan2(py, px),
+        (px*vx + py*vy)/sqrt(px*px + py*py);
+
+    return z_out;
+  }
+
+//  MatrixXd RadarJacobian(const VectorXd &x) {
+//    MatrixXd Hj(3, 4);
+//    //recover state parameters
+//    float px = x(0);
+//    float py = x(1);
+//    float vx = x(2);
+//    float vy = x(3);
+//
+//    float rho = sqrt(px * px + py * py);
+//    float rho2 = rho * rho;
+//    float rho3 = rho2 * rho;
+//
+//    //check division by zero
+//    if (rho < 1e-6) {
+//      cerr << "Divide by zero!! Oh noes!!" << endl;
+//      return Hj;
+//    }
+//    if (abs(rho) < 1e-4) {
+//      Hj << 0, 0, 0, 0,
+//           -0, 0, 0, 0,
+//            0, 0, 0, 0;
+//    } else {
+//      //compute the Jacobian matrix
+//      Hj << px / rho, py / rho, 0, 0,
+//          -py / rho2, px / rho2, 0, 0,
+//          py * (vx * py - vy * px) / rho3, px * (vy * px - vx * py) / rho3, px / rho, py / rho;
+//    }
+//
+//    return Hj;
+//  }
+}
 
 int main(int argc, char* argv[]) {
 
@@ -82,7 +171,7 @@ int main(int argc, char* argv[]) {
       // LASER MEASUREMENT
 
       // read measurements at this timestamp
-      meas_package.sensor_type_ = MeasurementPackage::LASER;
+      meas_package.sensor_type_ = SensorType::LASER;
       meas_package.raw_measurements_ = VectorXd(2);
       float x;
       float y;
@@ -96,7 +185,7 @@ int main(int argc, char* argv[]) {
       // RADAR MEASUREMENT
 
       // read measurements at this timestamp
-      meas_package.sensor_type_ = MeasurementPackage::RADAR;
+      meas_package.sensor_type_ = SensorType::RADAR;
       meas_package.raw_measurements_ = VectorXd(3);
       float ro;
       float theta;
@@ -125,7 +214,21 @@ int main(int argc, char* argv[]) {
   }
 
   // Create a Fusion EKF instance
-  FusionEKF fusionEKF;
+  DynamicModel motionModel = MakeMotionModel();
+  VectorXd x_in = VectorXd(4);
+  x_in << 1, 1, 1, 1;
+
+
+  MatrixXd P_in = MatrixXd(4, 4);
+  P_in << 10, 0, 0, 0,
+      0, 10, 0, 0,
+      0, 0, 1000, 0,
+      0, 0, 0, 1000;
+  FusionEKF fusionEKF = FusionEKF(x_in, P_in, motionModel);
+//  fusionEKF.Init(x_in, P_in, motionModel);
+
+  fusionEKF.AddLinearSensor(SensorType::LASER, R_laser, H_laser);
+  fusionEKF.AddSensor(SensorType::RADAR, R_radar, RadarMeasurement);
 
   // used to compute the RMSE later
   vector<VectorXd> estimations;
@@ -145,11 +248,11 @@ int main(int argc, char* argv[]) {
     out_file_ << fusionEKF.ekf_.x_(3) << "\t";
 
     // output the measurements
-    if (measurement_pack_list[k].sensor_type_ == MeasurementPackage::LASER) {
+    if (measurement_pack_list[k].sensor_type_ == SensorType::LASER) {
       // output the estimation
       out_file_ << measurement_pack_list[k].raw_measurements_(0) << "\t";
       out_file_ << measurement_pack_list[k].raw_measurements_(1) << "\t";
-    } else if (measurement_pack_list[k].sensor_type_ == MeasurementPackage::RADAR) {
+    } else if (measurement_pack_list[k].sensor_type_ == SensorType::RADAR) {
       // output the estimation in the cartesian coordinates
       float ro = measurement_pack_list[k].raw_measurements_(0);
       float phi = measurement_pack_list[k].raw_measurements_(1);
@@ -165,11 +268,10 @@ int main(int argc, char* argv[]) {
 
     estimations.push_back(fusionEKF.ekf_.x_);
     ground_truth.push_back(gt_pack_list[k].gt_values_);
+    cout<<k<<endl;
   }
-
   // compute the accuracy (RMSE)
-  Tools tools;
-  cout << "Accuracy - RMSE:" << endl << tools.CalculateRMSE(estimations, ground_truth) << endl;
+  cout << "Accuracy - RMSE:" << endl << Tools::CalculateRMSE(estimations, ground_truth) << endl;
 
   // close files
   if (out_file_.is_open()) {
