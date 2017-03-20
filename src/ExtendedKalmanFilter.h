@@ -7,30 +7,20 @@
 using Eigen::MatrixXd;
 using Eigen::VectorXd;
 
-struct enum_hash
-{
-  template <typename T>
-  inline
-  typename std::enable_if<std::is_enum<T>::value, std::size_t>::type
-  operator ()(T const value) const
-  {
-    return static_cast<std::size_t>(value);
-  }
-};
 enum SensorType {
   LASER,
   RADAR
 };
 
 // function pointer for measurement function
-typedef std::function<VectorXd (float dt, const VectorXd &x)> ModelFunc;
-typedef std::function<MatrixXd (float dt, const VectorXd &x)> ModelJacobianFunc;
+typedef std::function<std::tuple<VectorXd, MatrixXd> (float dt, const VectorXd &x)> ModelFunc;
+//typedef std::function<MatrixXd (float dt, const VectorXd &x)> ModelJacobianFunc;
 typedef std::function<MatrixXd (float dt, const VectorXd &x)> ProcessNoiseFunc;
 
 typedef std::function<VectorXd (const VectorXd &x)> MeasurementFunc;
 typedef std::function<MatrixXd (const VectorXd &x)> SensorJacobianFunc;
 
-typedef std::tuple<ModelFunc, ModelJacobianFunc, ProcessNoiseFunc> DynamicModel;
+typedef std::tuple<ModelFunc, ProcessNoiseFunc> DynamicModel;
 typedef std::tuple<MatrixXd, MeasurementFunc, SensorJacobianFunc> SensorModel;
 
 //ModelFunc MakeLinearSensor(const MatrixXd& F);

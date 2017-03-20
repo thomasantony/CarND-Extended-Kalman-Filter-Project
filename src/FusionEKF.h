@@ -11,7 +11,7 @@
 #include "measurement_package.h"
 #include "ExtendedKalmanFilter.h"
 
-typedef std::unordered_map<SensorType, SensorModel, enum_hash> SensorMap;
+typedef std::unordered_map<SensorType, SensorModel> SensorMap;
 
 class FusionEKF {
 public:
@@ -60,14 +60,6 @@ private:
 
   // Map containing sensor definitions
   SensorMap sensors_;
-
-//  MatrixXd F_;
-//  MatrixXd R_;
-//  MatrixXd Q_;
-
-//  //acceleration noise components
-//  float noise_ax;
-//  float noise_ay;
 };
 
 #endif /* FusionEKF_H_ */

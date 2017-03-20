@@ -20,13 +20,11 @@ void ExtendedKalmanFilter::Predict(float delta_T) {
 
   ProcessNoiseFunc noiseFunc;
   ModelFunc dynamicFunc;
-  ModelJacobianFunc jacobianFunc;
-  std::tie(dynamicFunc, jacobianFunc, noiseFunc) = dynamicModel_;
+  MatrixXd F;
 
-//  x_ = dynamicFunc(delta_T, x_);
-  MatrixXd F = jacobianFunc(delta_T, x_);
-  cout << "x:" << x_ << endl;
-  x_ = F * x_;
+  std::tie(dynamicFunc, noiseFunc) = dynamicModel_;
+  std::tie(x_, F) = dynamicFunc(delta_T, x_);
+
   auto Q_ = noiseFunc(delta_T, x_);
   P_ = F * P_ * F.transpose() + Q_;
 }
