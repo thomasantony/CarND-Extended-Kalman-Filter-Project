@@ -1,7 +1,6 @@
 #include "ExtendedKalmanFilter.h"
-#include <iostream>
+#include "tools.h"
 
-using namespace std;
 
 ExtendedKalmanFilter::ExtendedKalmanFilter() {}
 
@@ -17,7 +16,6 @@ void ExtendedKalmanFilter::Init(const VectorXd &x_in, const MatrixXd &P_in, Dyna
 
 void ExtendedKalmanFilter::Predict(float delta_T) {
   // KF Prediction step
-
   ProcessNoiseFunc noiseFunc;
   ModelFunc dynamicFunc;
   MatrixXd F;
@@ -33,19 +31,20 @@ void ExtendedKalmanFilter::UpdateEKF(const Eigen::VectorXd &z, const SensorModel
   /**
     * update the state by using Extended Kalman Filter equations
   */
-  MeasurementFunc h_func;
+  SensorFunc h_func;
   SensorJacobianFunc H_func;
-  MatrixXd R;
+  MatrixXd R, H;
+  VectorXd z_pred;
 
   std::tie(R, h_func, H_func) = sensor;
 
+  z_pred = h_func(x_);
   if(H_func == NULL)
   {
-    H_func = MakeSensorJacobian(h_func);
+    H = Tools::ComputeJacobian(h_func, x_);
+  }else{
+    H = H_func(x_);
   }
-  VectorXd z_pred;
-  z_pred = h_func(x_);
-  MatrixXd H = H_func(x_);
 
   UpdateWithPrediction(z, z_pred, H, R);
 }

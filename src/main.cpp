@@ -15,48 +15,50 @@ using Eigen::MatrixXd;
 using Eigen::VectorXd;
 using std::vector;
 
-// Problem definitions
+/** Problem-specific configuration starts here **/
 namespace {
+  /* Motion model */
+  const auto modelFunc = ModelFunc([](float dt, const VectorXd &x){
+    MatrixXd F = MatrixXd(4,4);
+    F << 1, 0, dt, 0,
+        0, 1,  0, dt,
+        0, 0,  1, 0,
+        0, 0,  0, 1;
+    return std::tuple<VectorXd, MatrixXd>(F*x, F);
+  });
+
+  // Process noise
+  const float noise_ax = 7, noise_ay = 7;
+
+  const auto processNoiseFunc =  ProcessNoiseFunc([](float dt, const VectorXd &x) mutable {
+    MatrixXd Q = MatrixXd(4, 4);
+    float dt2, dt3, dt4;
+    dt2 = dt*dt;
+    dt3 = dt2*dt;
+    dt4 = dt3*dt;
+
+    Q << noise_ax*dt4/4, 0, noise_ax*dt3/2, 0,
+        0, noise_ay*dt4/4, 0, noise_ay*dt3/2,
+        noise_ax*dt3/2, 0, noise_ax*dt2,  0,
+        0, noise_ay*dt3/2, 0, noise_ay*dt2;
+    return Q;
+  });
+  const DynamicModel motionModel = DynamicModel(modelFunc, processNoiseFunc);
+
+  /* Sensor models */
+  // Laser Sensor covariance and model matrix
   const MatrixXd H_laser = (MatrixXd(2,4) << 1, 0, 0, 0,
       0, 1, 0, 0).finished();
   const MatrixXd R_laser = (MatrixXd(2,2) << 0.0225, 0,
       0, 0.0225).finished();
+
+  // Radar Sensor
+  // Covariance
   const MatrixXd R_radar = (MatrixXd(3,3) << 0.09, 0, 0,
       0, 0.09, 0,
       0, 0, 0.09).finished();
 
-  const VectorXd x_0 = (VectorXd(4) << 1, 1, 1, 1).finished();
-  const MatrixXd P_0 = (MatrixXd(4,4) << 10, 0, 0, 0,
-      0, 10, 0, 0,
-      0, 0, 1000, 0,
-      0, 0, 0, 1000).finished();
-
-  const float noise_ax = 7, noise_ay = 7;
-
-  const auto processNoiseFunc =  ProcessNoiseFunc([](float dt, const VectorXd &x) mutable {
-      MatrixXd Q = MatrixXd(4, 4);
-      float dt2, dt3, dt4;
-      dt2 = dt*dt;
-      dt3 = dt2*dt;
-      dt4 = dt3*dt;
-
-      Q << noise_ax*dt4/4, 0, noise_ax*dt3/2, 0,
-          0, noise_ay*dt4/4, 0, noise_ay*dt3/2,
-          noise_ax*dt3/2, 0, noise_ax*dt2,  0,
-          0, noise_ay*dt3/2, 0, noise_ay*dt2;
-      return Q;
-    });
-
-  const auto modelFunc = ModelFunc([](float dt, const VectorXd &x){
-      MatrixXd F = MatrixXd(4,4);
-      F << 1, 0, dt, 0,
-          0, 1,  0, dt,
-          0, 0,  1, 0,
-          0, 0,  0, 1;
-      return std::tuple<VectorXd, MatrixXd>(F*x, F);
-    });
-  const DynamicModel motionModel = DynamicModel(modelFunc, processNoiseFunc);
-
+  // The non-linear radar measurement model
   VectorXd RadarMeasurement(const VectorXd &x) {
     VectorXd z_out(3);
     float px = x[0];
@@ -71,6 +73,7 @@ namespace {
     return z_out;
   }
 
+  // Compute the radar jacobian matrix
   MatrixXd RadarJacobian(const VectorXd &x) {
     MatrixXd Hj(3, 4);
     //recover state parameters
@@ -90,8 +93,8 @@ namespace {
     }
     if (abs(rho) < 1e-4) {
       Hj << 0, 0, 0, 0,
-          -0, 0, 0, 0,
-          0, 0, 0, 0;
+            0, 0, 0, 0,
+            0, 0, 0, 0;
     } else {
       //compute the Jacobian matrix
       Hj << px / rho, py / rho, 0, 0,
@@ -101,8 +104,56 @@ namespace {
 
     return Hj;
   }
-}
 
+  // Initial state, covariance and sensors
+  const MatrixXd P_0 = (MatrixXd(4,4) << 50, 0, 0, 0,
+      0, 50, 0, 0,
+      0, 0, 100, 0,
+      0, 0, 0, 100).finished();
+
+  /* Function to initialize the FusionEKF object using first measurement */
+  // Returns true on success
+  bool InitEKF(FusionEKF& fusionEKF, MeasurementPackage& first_measurement)
+  {
+    // Initialize the sensors
+    fusionEKF.AddLinearSensor(SensorType::LASER, R_laser, H_laser);
+    fusionEKF.AddSensor(SensorType::RADAR, R_radar, RadarMeasurement);
+
+    // Initialize state from first measurement
+    VectorXd x_0 = VectorXd(4);
+    float rho;
+    if (first_measurement.sensor_type_ == SensorType::RADAR) {
+      /**
+      Convert radar from polar to cartesian coordinates and initialize state.
+      */
+      float phi, rhodot;
+      rho = first_measurement.raw_measurements_[0];
+      phi = first_measurement.raw_measurements_[1];
+      x_0 << rho*cos(phi), rho*sin(phi), 0, 0;
+    }
+    else if (first_measurement.sensor_type_ == SensorType::LASER) {
+      /**
+      Initialize state.
+      */
+      float px, py;
+      px = first_measurement.raw_measurements_[0];
+      py = first_measurement.raw_measurements_[1];
+      rho = sqrt(px*px + py*py);
+      x_0 << px, py, 0, 0;
+    }
+    if(abs(rho) < 1e-4)
+    {
+      return false;
+    }
+    fusionEKF.Init(x_0, P_0, motionModel, first_measurement.timestamp_);
+
+    return true;
+  }
+}
+/***** End of configuration *****/
+/********************************/
+
+/*** Main Program begins here ***/
 void check_arguments(int argc, char* argv[]) {
   string usage_instructions = "Usage instructions: ";
   usage_instructions += argv[0];
@@ -138,7 +189,6 @@ void check_files(ifstream& in_file, string& in_name,
     exit(EXIT_FAILURE);
   }
 }
-
 
 int main(int argc, char* argv[]) {
 
@@ -215,12 +265,9 @@ int main(int argc, char* argv[]) {
     gt_pack_list.push_back(gt_package);
   }
 
-  // Create a Fusion EKF instance
+  // Create a Fusion EKF instance and initialize it
   FusionEKF fusionEKF;
-  fusionEKF.Init(x_0, P_0, motionModel);
 
-  fusionEKF.AddLinearSensor(SensorType::LASER, R_laser, H_laser);
-  fusionEKF.AddSensor(SensorType::RADAR, R_radar, RadarMeasurement, RadarJacobian);
 
   // used to compute the RMSE later
   vector<VectorXd> estimations;
@@ -229,8 +276,16 @@ int main(int argc, char* argv[]) {
   //Call the EKF-based fusion
   size_t N = measurement_pack_list.size();
   for (size_t k = 0; k < N; ++k) {
-    // start filtering from the second frame (the speed is unknown in the first
-    // frame)
+    if(!fusionEKF.is_initialized_)
+    {
+      auto result = InitEKF(fusionEKF, measurement_pack_list[k]);
+      if(!result){
+        // skip frame if initialization failed
+        cout << "Skipping frame" << k << endl;
+        continue;
+      }
+    }
+    // start filtering from the second frame (assuming first frame was valid)
     fusionEKF.ProcessMeasurement(measurement_pack_list[k]);
 
     // output the estimation

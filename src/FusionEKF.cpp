@@ -17,9 +17,19 @@ FusionEKF::FusionEKF() {
   previous_timestamp_ = 0;
 }
 
-void FusionEKF::Init(const VectorXd &x0, const MatrixXd &P0, DynamicModel dynamicModel)
+void FusionEKF::Init(const VectorXd &x0, const MatrixXd &P0, DynamicModel dynamicModel, long timestamp)
 {
+  /****************************************************************************
+   *  Initialization
+   ****************************************************************************/
+
   ekf_.Init(x0, P0, dynamicModel);
+
+  // first measurement
+  previous_timestamp_ = timestamp;
+
+  // done initializing, no need to predict or update
+  is_initialized_ = true;
 }
 /**
 * Destructor.
@@ -29,28 +39,19 @@ FusionEKF::~FusionEKF() {}
 /**
 * Add new sensor definition.
 */
-void FusionEKF::AddSensor(SensorType type, const Eigen::MatrixXd& R, const MeasurementFunc& h, const SensorJacobianFunc& H)
+void FusionEKF::AddSensor(SensorType type, const Eigen::MatrixXd& R, const SensorFunc& h, const SensorJacobianFunc& H)
 {
   sensors_[type] = std::make_tuple(R, h, H);
 }
-
+/**
+* Add new linear sensor definition.
+*/
 void FusionEKF::AddLinearSensor(SensorType type, const Eigen::MatrixXd& R, const MatrixXd& H)
 {
   sensors_[type] = MakeLinearSensor(R, H);
 }
 
 void FusionEKF::ProcessMeasurement(const MeasurementPackage &measurement_pack) {
-  /*****************************************************************************
-   *  Initialization
-   ****************************************************************************/
-  if (!is_initialized_) {
-    // first measurement
-      previous_timestamp_ = measurement_pack.timestamp_;
-      // done initializing, no need to predict or update
-      is_initialized_ = true;
-      cout<<"Initialized!"<<endl;
-  }
-
   /*****************************************************************************
    *  Prediction
    ****************************************************************************/

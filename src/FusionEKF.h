@@ -25,7 +25,7 @@ public:
   */
   virtual ~FusionEKF();
 
-  void Init(const VectorXd &x0, const MatrixXd &P0, DynamicModel dynamicModel);
+  void Init(const VectorXd &x0, const MatrixXd &P0, DynamicModel dynamicModel, long timestamp);
   /**
   * Run the whole flow of the Kalman Filter from here.
   */
@@ -33,28 +33,29 @@ public:
 
   /**
    * Add sensor definition to FusionEKF
+   * @param type
+   * @param measCov
+   * @param measModel
+   * @param measJac
    */
-  void AddSensor(SensorType type, const Eigen::MatrixXd& R, const MeasurementFunc& h, const SensorJacobianFunc& H = NULL);
+  void AddSensor(SensorType type, const Eigen::MatrixXd& measCov, const SensorFunc& measModel, const SensorJacobianFunc& measJac = NULL);
 
   /**
    * Add linear model
    * @param type
-   * @param R
-   * @param h
-   * @param H
+   * @param measCov
+   * @param measMat
    */
-  void AddLinearSensor(SensorType type, const Eigen::MatrixXd& R, const MatrixXd& H);
+  void AddLinearSensor(SensorType type, const Eigen::MatrixXd& measCov, const MatrixXd& measMat);
   /**
   * Kalman Filter update and prediction math lives in here.
   */
   ExtendedKalmanFilter ekf_;
 
-
-
-private:
   // check whether the tracking toolbox was initiallized or not (first measurement)
   bool is_initialized_;
 
+private:
   // previous timestamp
   long previous_timestamp_;
 

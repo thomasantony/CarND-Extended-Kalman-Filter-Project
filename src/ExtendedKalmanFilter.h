@@ -14,40 +14,20 @@ enum SensorType {
 
 // function pointer for measurement function
 typedef std::function<std::tuple<VectorXd, MatrixXd> (float dt, const VectorXd &x)> ModelFunc;
-//typedef std::function<MatrixXd (float dt, const VectorXd &x)> ModelJacobianFunc;
 typedef std::function<MatrixXd (float dt, const VectorXd &x)> ProcessNoiseFunc;
 
-typedef std::function<VectorXd (const VectorXd &x)> MeasurementFunc;
+typedef std::function<VectorXd (const VectorXd &x)> SensorFunc;
 typedef std::function<MatrixXd (const VectorXd &x)> SensorJacobianFunc;
 
 typedef std::tuple<ModelFunc, ProcessNoiseFunc> DynamicModel;
-typedef std::tuple<MatrixXd, MeasurementFunc, SensorJacobianFunc> SensorModel;
+typedef std::tuple<MatrixXd, SensorFunc, SensorJacobianFunc> SensorModel;
 
 //ModelFunc MakeLinearSensor(const MatrixXd& F);
 inline SensorModel MakeLinearSensor(const MatrixXd &R, const MatrixXd &H)
 {
-  auto measurementFunc = MeasurementFunc([H](const VectorXd& x){return H*x;});
+  auto measurementFunc = SensorFunc([H](const VectorXd& x){return H*x;});
   auto jacobianFunc = SensorJacobianFunc([H](const VectorXd& x){return H;});
   return std::make_tuple(R, measurementFunc, jacobianFunc);
-}
-
-inline SensorJacobianFunc MakeSensorJacobian(MeasurementFunc f, const float h = 1e-4)
-{
-  return SensorJacobianFunc([f, h](const VectorXd& x){
-    auto n = x.size();
-
-    MatrixXd I = MatrixXd::Identity(n, n)*h;
-    auto fx = f(x);
-    auto m = fx.size();
-
-    MatrixXd jac = MatrixXd(m, n);
-    for(auto i=0; i<x.size(); i++)
-    {
-      auto step = I.col(i);
-      jac.col(i) = (f(x+step) - f(x-step))/(2*h);
-    }
-    return jac;
-  });
 }
 
 class ExtendedKalmanFilter {
