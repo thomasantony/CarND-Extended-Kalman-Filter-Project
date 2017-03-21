@@ -281,7 +281,7 @@ int main(int argc, char* argv[]) {
       auto result = InitEKF(fusionEKF, measurement_pack_list[k]);
       if(!result){
         // skip frame if initialization failed
-        cout << "Skipping frame" << k << endl;
+        cout << "Skipping frame " << k << endl;
         continue;
       }
     }
@@ -317,7 +317,7 @@ int main(int argc, char* argv[]) {
     ground_truth.push_back(gt_pack_list[k].gt_values_);
   }
   // compute the accuracy (RMSE)
-  cout << "Accuracy - RMSE:" << endl << Tools::CalculateRMSE(estimations, ground_truth) << endl;
+  cout << "\nAccuracy - RMSE:" << endl << Tools::CalculateRMSE(estimations, ground_truth) << endl;
 
   // close files
   if (out_file_.is_open()) {
