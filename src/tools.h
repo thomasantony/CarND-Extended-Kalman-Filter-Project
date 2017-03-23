@@ -14,7 +14,7 @@ public:
   */
   static VectorXd CalculateRMSE(const vector<VectorXd> &estimations, const vector<VectorXd> &ground_truth);
   template<class Func>
-  static MatrixXd ComputeJacobian(Func f, const VectorXd& x, const float h=1e-4)
+  inline static MatrixXd ComputeJacobian(Func f, const VectorXd& x, const float h=1e-4)
   {
     int m, n;
     MatrixXd jac;

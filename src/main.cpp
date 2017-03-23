@@ -210,7 +210,6 @@ int main(int argc, char* argv[]) {
   // prep the measurement packages (each line represents a measurement at a
   // timestamp)
   while (getline(in_file_, line)) {
-
     string sensor_type;
     MeasurementPackage meas_package;
     GroundTruthPackage gt_package;
